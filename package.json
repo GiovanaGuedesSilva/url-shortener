@@ -1,0 +1,40 @@
+{
+  "name": "url-shortener",
+  "version": "1.0.0",
+  "description": "A simple RESTful API that follows users to shorten longer URLs.",
+  "keywords": [
+    "url-shortener",
+    "api",
+    "nodejs",
+    "api",
+    "postgres",
+    "nginx"
+  ],
+  "homepage": "https://github.com/GiovanaGuedesSilva/url-shortener#readme",
+  "bugs": {
+    "url": "https://github.com/GiovanaGuedesSilva/url-shortener/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GiovanaGuedesSilva/url-shortener.git"
+  },
+  "license": "MIT",
+  "author": "Giovana Guedes",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "nanoid": "^5.1.6",
+    "pg": "^8.18.0",
+    "redis": "^5.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
