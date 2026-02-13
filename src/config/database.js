@@ -1,4 +1,5 @@
 import pg from 'pg';
+
 const { Pool } = pg;
 
 let pool;
@@ -13,7 +14,6 @@ export async function connectToDatabase() {
 			password: process.env.DB_PASSWORD || 'postgres',
 		});
 
-		// Testa a conexão
 		await pool.query('SELECT NOW()');
 		console.log('✓ Database connected successfully');
 	} catch (error) {
