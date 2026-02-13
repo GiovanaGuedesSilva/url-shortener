@@ -13,4 +13,11 @@ export async function startServer() {
 	server.listen(port, () => {
 		console.log(`Server listening on port ${port}`);
 	});
+
+	server.on('error', (error) => {
+		console.error('Server error:', error);
+		process.exit(1);
+	});
+
+	return server;
 }
