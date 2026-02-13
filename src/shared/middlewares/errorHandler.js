@@ -1,7 +1,6 @@
 export function errorHandler(err, req, res, next) {
 	console.error('Error:', err);
 
-	// Se já foi enviada resposta, delega ao handler padrão do Express
 	if (res.headersSent) {
 		return next(err);
 	}
