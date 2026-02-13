@@ -32,11 +32,13 @@ export class UrlService {
 
 		try {
 			const redis = getRedisClient();
-			await redis.setEx(
-				`url:${shortCode}`,
-				60 * 60 * 24,
-				JSON.stringify(createdUrl)
-			);
+			if (redis) {
+				await redis.setEx(
+					`url:${shortCode}`,
+					60 * 60 * 24,
+					JSON.stringify(createdUrl)
+				);
+			}
 		} catch (error) {
 			console.error('Error caching URL:', error);
 		}
@@ -47,14 +49,15 @@ export class UrlService {
 	async getOriginalUrl(shortCode) {
 		try {
 			const redis = getRedisClient();
-			const cached = await redis.get(`url:${shortCode}`);
-			
-			if (cached) {
-				const url = JSON.parse(cached);
-				this.urlRepository.incrementAccessCount(shortCode).catch(err => {
-					console.error('Error incrementing counter:', err);
-				});
-				return url;
+			if (redis) {
+				const cached = await redis.get(`url:${shortCode}`);
+				if (cached) {
+					const url = JSON.parse(cached);
+					this.urlRepository.incrementAccessCount(shortCode).catch(err => {
+						console.error('Error incrementing counter:', err);
+					});
+					return url;
+				}
 			}
 		} catch (error) {
 			console.error('Error fetching from cache:', error);
@@ -67,11 +70,13 @@ export class UrlService {
 
 			try {
 				const redis = getRedisClient();
-				await redis.setEx(
-					`url:${shortCode}`,
-					60 * 60 * 24,
-					JSON.stringify(url)
-				);
+				if (redis) {
+					await redis.setEx(
+						`url:${shortCode}`,
+						60 * 60 * 24,
+						JSON.stringify(url)
+					);
+				}
 			} catch (error) {
 				console.error('Error caching URL:', error);
 			}
@@ -83,7 +88,7 @@ export class UrlService {
 	async invalidateCache(shortCode) {
 		try {
 			const redis = getRedisClient();
-			await redis.del(`url:${shortCode}`);
+			if (redis) await redis.del(`url:${shortCode}`);
 		} catch (error) {
 			console.error('Error invalidating cache:', error);
 		}

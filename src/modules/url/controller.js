@@ -13,14 +13,14 @@ class UrlController {
 
 			if (!url) {
 				return res.status(400).json({
-					error: 'URL is required',
+					errors: ['URL is required'],
 				});
 			}
 
 			const result = await this.urlService.createShortUrl(url);
 
 			return res.status(201).json({
-				id: result.id,
+				id: String(result.id),
 				url: result.url,
 				shortCode: result.shortCode,
 				createdAt: result.createdAt,
@@ -28,9 +28,9 @@ class UrlController {
 			});
 		} catch (error) {
 			if (error.name === 'ZodError') {
+				const messages = (error.issues ?? error.errors)?.map((e) => e.message) ?? ['Invalid data'];
 				return res.status(400).json({
-					error: 'Invalid data',
-					details: error.errors,
+					errors: messages,
 				});
 			}
 			next(error);
@@ -59,7 +59,7 @@ class UrlController {
 		try {
 			const { shortCode } = req.params;
 
-			const url = await this.urlService.getOriginalUrl(shortCode);
+			const url = await this.urlRepository.findByShortCode(shortCode);
 
 			if (!url) {
 				return res.status(404).json({
@@ -68,7 +68,7 @@ class UrlController {
 			}
 
 			return res.json({
-				id: url.id,
+				id: String(url.id),
 				url: url.url,
 				shortCode: url.shortCode,
 				createdAt: url.createdAt,
@@ -92,7 +92,7 @@ class UrlController {
 			}
 
 			return res.json({
-				id: url.id,
+				id: String(url.id),
 				url: url.url,
 				shortCode: url.shortCode,
 				createdAt: url.createdAt,
@@ -111,7 +111,7 @@ class UrlController {
 
 			if (!url) {
 				return res.status(400).json({
-					error: 'URL is required',
+					errors: ['URL is required'],
 				});
 			}
 
@@ -124,7 +124,7 @@ class UrlController {
 			}
 
 			return res.json({
-				id: updatedUrl.id,
+				id: String(updatedUrl.id),
 				url: updatedUrl.url,
 				shortCode: updatedUrl.shortCode,
 				createdAt: updatedUrl.createdAt,
@@ -132,9 +132,9 @@ class UrlController {
 			});
 		} catch (error) {
 			if (error.name === 'ZodError') {
+				const messages = (error.issues ?? error.errors)?.map((e) => e.message) ?? ['Invalid data'];
 				return res.status(400).json({
-					error: 'Invalid data',
-					details: error.errors,
+					errors: messages,
 				});
 			}
 			next(error);

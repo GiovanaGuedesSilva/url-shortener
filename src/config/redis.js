@@ -19,21 +19,19 @@ export async function connectRedis() {
 		await redisClient.connect();
 		console.log('✓ Redis connected successfully');
 	} catch (error) {
-		console.error('✗ Redis connection failed:', error);
-		throw error;
+		console.warn('✗ Redis unavailable, running without cache:', error.message);
+		redisClient = null;
 	}
 }
 
 export function getRedisClient() {
-	if (!redisClient) {
-		throw new Error('Redis not initialized. Call connectRedis first.');
-	}
-	return redisClient;
+	return redisClient ?? null;
 }
 
 export async function closeRedis() {
 	if (redisClient) {
 		await redisClient.quit();
+		redisClient = null;
 		console.log('Redis connection closed');
 	}
 }
