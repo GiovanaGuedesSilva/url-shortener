@@ -4,15 +4,15 @@ A production-ready RESTful API service for URL shortening. Built with Node.js, E
 
 ## Features
 
-- ✅ Create shortened URLs with unique codes
-- ✅ Retrieve original URLs from short codes
-- ✅ Update existing shortened URLs
-- ✅ Delete shortened URLs
-- ✅ Access statistics tracking
-- ✅ Automatic 301 redirects
-- ✅ Redis caching for improved performance
-- ✅ Input validation with Zod
-- ✅ Clean architecture with separation of concerns
+- Create shortened URLs with unique codes
+- Retrieve original URLs from short codes
+- Update existing shortened URLs
+- Delete shortened URLs
+- Access statistics tracking
+- Automatic 301 redirects
+- Redis caching for improved performance
+- Input validation with Zod
+- Clean architecture with separation of concerns
 
 ## Tech Stack
 
