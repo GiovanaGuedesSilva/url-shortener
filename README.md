@@ -2,6 +2,8 @@
 
 A production-ready RESTful API service for URL shortening. Built with Node.js, Express, PostgreSQL, and Redis following clean architecture principles.
 
+Projeto do [roadmap.sh](https://roadmap.sh/projects/url-shortening-service).
+
 ## Features
 
 - Create shortened URLs with unique codes
