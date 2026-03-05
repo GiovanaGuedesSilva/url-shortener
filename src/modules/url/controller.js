@@ -1,5 +1,6 @@
 import { UrlService } from './service.js';
 import urlRepository from './repository.js';
+import { toUrlResponse, toUrlStatsResponse } from './mapper.js';
 
 class UrlController {
 	constructor() {
@@ -19,13 +20,7 @@ class UrlController {
 
 			const result = await this.urlService.createShortUrl(url);
 
-			return res.status(201).json({
-				id: String(result.id),
-				url: result.url,
-				shortCode: result.shortCode,
-				createdAt: result.createdAt,
-				updatedAt: result.updatedAt,
-			});
+			return res.status(201).json(toUrlResponse(result));
 		} catch (error) {
 			if (error.name === 'ZodError') {
 				const messages = (error.issues ?? error.errors)?.map((e) => e.message) ?? ['Invalid data'];
@@ -59,7 +54,7 @@ class UrlController {
 		try {
 			const { shortCode } = req.params;
 
-			const url = await this.urlRepository.findByShortCode(shortCode);
+			const url = await this.urlService.getUrlInfo(shortCode);
 
 			if (!url) {
 				return res.status(404).json({
@@ -67,13 +62,7 @@ class UrlController {
 				});
 			}
 
-			return res.json({
-				id: String(url.id),
-				url: url.url,
-				shortCode: url.shortCode,
-				createdAt: url.createdAt,
-				updatedAt: url.updatedAt,
-			});
+			return res.json(toUrlResponse(url));
 		} catch (error) {
 			next(error);
 		}
@@ -83,6 +72,7 @@ class UrlController {
 		try {
 			const { shortCode } = req.params;
 
+			// Stats always go directly to DB to return the real access count
 			const url = await this.urlRepository.findByShortCode(shortCode);
 
 			if (!url) {
@@ -91,14 +81,7 @@ class UrlController {
 				});
 			}
 
-			return res.json({
-				id: String(url.id),
-				url: url.url,
-				shortCode: url.shortCode,
-				createdAt: url.createdAt,
-				updatedAt: url.updatedAt,
-				accessCount: url.accessCount,
-			});
+			return res.json(toUrlStatsResponse(url));
 		} catch (error) {
 			next(error);
 		}
@@ -123,13 +106,7 @@ class UrlController {
 				});
 			}
 
-			return res.json({
-				id: String(updatedUrl.id),
-				url: updatedUrl.url,
-				shortCode: updatedUrl.shortCode,
-				createdAt: updatedUrl.createdAt,
-				updatedAt: updatedUrl.updatedAt,
-			});
+			return res.json(toUrlResponse(updatedUrl));
 		} catch (error) {
 			if (error.name === 'ZodError') {
 				const messages = (error.issues ?? error.errors)?.map((e) => e.message) ?? ['Invalid data'];
@@ -160,4 +137,4 @@ class UrlController {
 	};
 }
 
-export default new UrlController(); 
+export default new UrlController();
