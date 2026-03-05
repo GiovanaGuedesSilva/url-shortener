@@ -7,7 +7,7 @@ import { errorHandler } from '../../shared/middlewares/errorHandler.js';
 const app = express();
 
 app.use(cors());
-app.use(morgan('dev'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json());
 
 registerRoutes(app);
