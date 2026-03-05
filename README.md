@@ -1,29 +1,32 @@
 # URL Shortener Service
 
-A production-ready RESTful API service for URL shortening. Built with Node.js, Express, PostgreSQL, and Redis following clean architecture principles.
+A RESTful API service for URL shortening built with Node.js, Express, PostgreSQL, and Redis.
 
 Projeto do [roadmap.sh](https://roadmap.sh/projects/url-shortening-service).
 
 ## Features
 
-- Create shortened URLs with unique codes
-- Retrieve original URLs from short codes
+- Create shortened URLs with unique 7-character codes
+- Retrieve original URL info by short code
 - Update existing shortened URLs
 - Delete shortened URLs
-- Access statistics tracking
+- Access statistics tracking (redirect counter)
 - Automatic 301 redirects
-- Redis caching for improved performance
+- Redis caching with 24-hour TTL
 - Input validation with Zod
-- Clean architecture with separation of concerns
+- Graceful shutdown (closes DB and Redis on SIGTERM/SIGINT)
 
 ## Tech Stack
 
-- **Runtime:** Node.js
-- **Framework:** Express.js
-- **Database:** PostgreSQL
-- **Cache:** Redis
-- **Validation:** Zod
-- **Code Generation:** nanoid
+| Layer | Technology |
+|---|---|
+| Runtime | Node.js 20 (ES Modules) |
+| Framework | Express.js v5 |
+| Database | PostgreSQL 16 |
+| Cache | Redis 7 |
+| Validation | Zod |
+| Code generation | nanoid |
+| Reverse proxy | nginx (Docker only) |
 
 ## Project Structure
 
@@ -31,324 +34,215 @@ Projeto do [roadmap.sh](https://roadmap.sh/projects/url-shortening-service).
 url-shortener/
 ├── src/
 │   ├── config/
-│   │   ├── database.js      # PostgreSQL connection
-│   │   └── redis.js         # Redis client configuration
+│   │   ├── database.js        # PostgreSQL connection pool
+│   │   └── redis.js           # Redis client (optional — app runs without it)
 │   ├── infra/
 │   │   └── http/
-│   │       ├── server.js    # Express app setup
-│   │       └── routes.js    # Route registration
+│   │       ├── server.js      # Express app setup
+│   │       └── routes.js      # Route registration
 │   ├── modules/
 │   │   └── url/
-│   │       ├── controller.js  # Request handlers
-│   │       ├── service.js     # Business logic
-│   │       ├── repository.js  # Database operations
-│   │       ├── routes.js      # URL routes
-│   │       ├── schema.js      # Validation schemas
-│   │       ├── mapper.js      # Data transformation
-│   │       └── index.js       # Module exports
+│   │       ├── controller.js  # Request/response handlers
+│   │       ├── service.js     # Business logic + cache strategy
+│   │       ├── repository.js  # SQL queries (parameterized)
+│   │       ├── routes.js      # URL router
+│   │       ├── schema.js      # Zod validation schema
+│   │       ├── mapper.js      # DB row → response object
+│   │       └── index.js       # Barrel exports
 │   └── shared/
 │       ├── middlewares/
 │       │   └── errorHandler.js
 │       └── utils/
 │           └── generateShortCode.js
-├── app.js                  # Application bootstrap
-├── index.js                # Entry point
+├── database/
+│   └── init.sql               # Manual setup script (with reset DROPs)
+├── docker/
+│   ├── nginx/nginx.conf       # nginx reverse proxy config
+│   ├── postgres/init.sql      # Docker auto-init schema (no DROPs)
+│   └── redis/redis.conf       # Redis config (LRU, 256 MB)
+├── app.js                     # Server factory (connects DB + Redis)
+├── index.js                   # Entry point + graceful shutdown
+├── Dockerfile                 # Node.js 20 Alpine image
+├── docker-compose.yml         # Full stack: app, nginx, postgres, redis
 └── package.json
-
 ```
 
-## API Endpoints
+## Quick Start
 
-### 1. Create Short URL
+### Option A — Docker Compose (full stack, recommended)
+
+Starts everything (app, nginx, postgres, redis) with one command. The database schema is applied automatically on first run.
+
+```bash
+docker-compose up --build
+```
+
+The API will be available at `http://localhost` (port 80 via nginx).
+
+To tear down and remove volumes:
+```bash
+docker-compose down -v
+```
+
+### Option B — Local development
+
+Run PostgreSQL and Redis via Docker, and the app directly with Node.js for faster iteration.
+
+**1. Start infrastructure:**
+```bash
+docker-compose up postgres redis -d
+```
+
+**2. Install dependencies:**
+```bash
+npm install
+```
+
+**3. Configure environment:**
+```bash
+cp .env.example .env
+# Edit .env if your credentials differ from the defaults
+```
+
+**4. Apply the database schema:**
+
+```bash
+# Windows (PowerShell)
+$env:PGPASSWORD="postgres"
+& "psql" -U postgres -c "CREATE DATABASE urlshortener;"
+& "psql" -U postgres -d urlshortener -f "database/init.sql"
+```
+
+```bash
+# Linux / macOS
+psql -U postgres -c "CREATE DATABASE urlshortener;"
+psql -U postgres -d urlshortener -f database/init.sql
+```
+
+**5. Run the application:**
+```bash
+npm run dev     # development (nodemon, auto-reload)
+npm start       # production
+```
+
+The API will be available at `http://localhost:3000`.
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and adjust as needed.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3000` | HTTP port |
+| `NODE_ENV` | `development` | Environment (`development` / `production`) |
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_NAME` | `urlshortener` | Database name |
+| `DB_USER` | `postgres` | Database user |
+| `DB_PASSWORD` | `postgres` | Database password |
+| `REDIS_HOST` | `localhost` | Redis host |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_PASSWORD` | _(empty)_ | Redis password (optional) |
+
+> Redis is **optional** — if unavailable the app runs without caching and logs a warning.
+
+## API Reference
+
+### Health Check
+```http
+GET /health
+```
+```json
+{
+  "status": "OK",
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "uptime": 42.3
+}
+```
+
+---
+
+### Create Short URL
 ```http
 POST /shorten
 Content-Type: application/json
 
-{
-  "url": "https://www.example.com/some/long/url"
-}
+{ "url": "https://www.example.com/some/long/url" }
 ```
-
-**Response (201 Created):**
+**201 Created**
 ```json
 {
   "id": "1",
   "url": "https://www.example.com/some/long/url",
-  "shortCode": "abc123",
-  "createdAt": "2021-09-01T12:00:00Z",
-  "updatedAt": "2021-09-01T12:00:00Z"
+  "shortCode": "abc1234",
+  "createdAt": "2024-01-01T12:00:00.000Z",
+  "updatedAt": "2024-01-01T12:00:00.000Z"
 }
 ```
 
-### 2. Get URL Information
+---
+
+### Get URL Info
 ```http
 GET /shorten/:shortCode
 ```
+**200 OK** — same shape as create response (no `accessCount`).
 
-**Response (200 OK):**
-```json
-{
-  "id": "1",
-  "url": "https://www.example.com/some/long/url",
-  "shortCode": "abc123",
-  "createdAt": "2021-09-01T12:00:00Z",
-  "updatedAt": "2021-09-01T12:00:00Z"
-}
-```
+---
 
-### 3. Update Short URL
+### Update Short URL
 ```http
 PUT /shorten/:shortCode
 Content-Type: application/json
 
-{
-  "url": "https://www.example.com/some/updated/url"
-}
+{ "url": "https://www.example.com/updated/url" }
 ```
+**200 OK** — returns updated object.
 
-**Response (200 OK):**
-```json
-{
-  "id": "1",
-  "url": "https://www.example.com/some/updated/url",
-  "shortCode": "abc123",
-  "createdAt": "2021-09-01T12:00:00Z",
-  "updatedAt": "2021-09-01T12:30:00Z"
-}
-```
+---
 
-### 4. Delete Short URL
+### Delete Short URL
 ```http
 DELETE /shorten/:shortCode
 ```
+**204 No Content**
 
-**Response:** `204 No Content`
+---
 
-### 5. Get URL Statistics
+### Get URL Statistics
 ```http
 GET /shorten/:shortCode/stats
 ```
-
-**Response (200 OK):**
+**200 OK**
 ```json
 {
   "id": "1",
   "url": "https://www.example.com/some/long/url",
-  "shortCode": "abc123",
-  "createdAt": "2021-09-01T12:00:00Z",
-  "updatedAt": "2021-09-01T12:00:00Z",
+  "shortCode": "abc1234",
+  "createdAt": "2024-01-01T12:00:00.000Z",
+  "updatedAt": "2024-01-01T12:00:00.000Z",
   "accessCount": 10
 }
 ```
 
-### 6. Redirect to Original URL
+---
+
+### Redirect
 ```http
 GET /:shortCode
 ```
-
-**Response:** `301 Moved Permanently` (Redirects to original URL)
-
-### 7. Health Check
-```http
-GET /health
-```
-
-**Response (200 OK):**
-```json
-{
-  "status": "OK",
-  "timestamp": "2021-09-01T12:00:00Z",
-  "uptime": 123.456
-}
-```
-
-## Installation
-
-### Prerequisites
-
-- Node.js (v18+ recommended)
-- PostgreSQL (v14+)
-- Redis (v6+)
-- Docker (optional, for Redis container)
-
-### Quick Start
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/GiovanaGuedesSilva/url-shortener.git
-   cd url-shortener
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Start PostgreSQL and create database:**
-   
-   **Option A: Using psql directly**
-   ```bash
-   psql -U postgres
-   ```
-   
-   Then in psql:
-   ```sql
-   CREATE DATABASE urlshortener;
-   \c urlshortener
-   \i database/init.sql
-   ```
-   
-   **Option B: Using command line**
-   ```bash
-   # Windows (PowerShell)
-   $env:PGPASSWORD="postgres"; & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -c "CREATE DATABASE urlshortener;"
-   $env:PGPASSWORD="postgres"; & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d urlshortener -f "database/init.sql"
-   ```
-
-4. **Start Redis:**
-   
-   **Option A: Using Docker (Recommended)**
-   ```bash
-   docker run -d --name url-shortener-redis -p 6379:6379 redis:alpine
-   ```
-   
-   **Option B: Using local Redis**
-   ```bash
-   redis-server
-   ```
-
-5. **Configure environment variables:**
-   
-   Create a `.env` file in the root directory:
-   ```env
-   PORT=3000
-   NODE_ENV=development
-
-   # PostgreSQL
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=urlshortener
-   DB_USER=postgres
-   DB_PASSWORD=postgres
-
-   # Redis
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
-   REDIS_PASSWORD=
-   ```
-
-6. **Run the application:**
-   ```bash
-   # Development mode (with auto-reload)
-   npm run dev
-
-   # Production mode
-   npm start
-   ```
-
-The server will start on `http://localhost:3000`
-
-### Testing the API
-
-Run the automated test script:
-```powershell
-.\test-api.ps1
-```
-
-Or test manually:
-```bash
-curl http://localhost:3000/health
-```
-
-## Usage Examples
-
-### Using cURL
-
-**Create a short URL:**
-```bash
-curl -X POST http://localhost:3000/shorten \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://www.example.com/very/long/url"}'
-```
-
-**Get URL info:**
-```bash
-curl http://localhost:3000/shorten/abc123
-```
-
-**Update URL:**
-```bash
-curl -X PUT http://localhost:3000/shorten/abc123 \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://www.example.com/new/url"}'
-```
-
-**Get statistics:**
-```bash
-curl http://localhost:3000/shorten/abc123/stats
-```
-
-**Delete URL:**
-```bash
-curl -X DELETE http://localhost:3000/shorten/abc123
-```
-
-**Access shortened URL (redirect):**
-```bash
-curl -L http://localhost:3000/abc123
-```
-
-### Using PowerShell
-
-**Create a short URL:**
-```powershell
-$body = @{ url = "https://github.com/GiovanaGuedesSilva" } | ConvertTo-Json
-$response = Invoke-RestMethod -Uri "http://localhost:3000/shorten" -Method POST -Body $body -ContentType "application/json"
-Write-Host "Short Code: $($response.shortCode)"
-```
-
-**Get URL information:**
-```powershell
-$code = "abc123"
-$info = Invoke-RestMethod -Uri "http://localhost:3000/shorten/$code" -Method GET
-$info | ConvertTo-Json
-```
-
-**Update URL:**
-```powershell
-$body = @{ url = "https://github.com/GiovanaGuedesSilva/url-shortener" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:3000/shorten/$code" -Method PUT -Body $body -ContentType "application/json"
-```
-
-**Get statistics:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/shorten/$code/stats" -Method GET
-```
-
-**Delete URL:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/shorten/$code" -Method DELETE
-```
+**301 Moved Permanently** — redirects to the original URL.
 
 ## Error Responses
 
 ### 400 Bad Request
 ```json
-{
-  "error": "Invalid data",
-  "details": [
-    {
-      "message": "Invalid URL format"
-    }
-  ]
-}
+{ "errors": ["Invalid URL format"] }
 ```
 
 ### 404 Not Found
 ```json
-{
-  "error": "URL not found"
-}
+{ "error": "URL not found" }
 ```
 
 ### 500 Internal Server Error
@@ -360,189 +254,90 @@ Invoke-RestMethod -Uri "http://localhost:3000/shorten/$code" -Method DELETE
   }
 }
 ```
+> In `development` mode, `stack` is also included in the 500 response.
+
+## Testing
+
+Run the automated integration test script (requires the server to be running):
+```powershell
+.\test-api.ps1
+```
+
+The script covers all 7 endpoints: health, create, get info, update, stats, redirect (301), delete, and deletion verification (404).
 
 ## Architecture
 
-### Layered Architecture
+### Request Flow
 
-- **Controller Layer:** Handles HTTP requests and responses
-- **Service Layer:** Contains business logic and orchestrates operations
-- **Repository Layer:** Manages database operations
-- **Infrastructure Layer:** External services (database, cache, HTTP server)
+```
+Client
+  ↓
+nginx (port 80)          ← Docker only
+  ↓
+Express app (port 3000)
+  ↓
+Controller               ← validates input (Zod)
+  ↓
+Service                  ← cache-aside (Redis), business logic
+  ↓
+Repository               ← parameterized SQL (pg.Pool)
+  ↓
+PostgreSQL
+```
 
-### Key Design Decisions
+### Caching Strategy (cache-aside)
 
-1. **Caching Strategy:** Redis caching with 24-hour TTL for improved performance
-2. **URL Validation:** Zod schema validation for robust input checking
-3. **Unique Code Generation:** nanoid for generating short, URL-safe codes
-4. **Error Handling:** Centralized error handling middleware
-5. **Access Tracking:** Automatic increment of access counter on redirects
+- **Redirect (`GET /:shortCode`)** — checks Redis first; on miss, queries DB, increments counter, populates cache.
+- **Get info (`GET /shorten/:shortCode`)** — checks Redis first; on miss, queries DB. Counter is **not** incremented.
+- **Stats (`GET /shorten/:shortCode/stats`)** — always queries DB directly to return the real access count.
+- **Update / Delete** — invalidates cache after write.
 
-## Performance Optimizations
+## Database Schema
 
-- Redis caching reduces database load
-- Database indexes on `short_code` for fast lookups
-- Asynchronous access counter updates
-- Connection pooling for PostgreSQL
+```sql
+CREATE TABLE urls (
+    id           SERIAL PRIMARY KEY,
+    url          TEXT NOT NULL,
+    short_code   VARCHAR(10) UNIQUE NOT NULL,
+    access_count INTEGER DEFAULT 0 NOT NULL,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE INDEX idx_short_code ON urls(short_code);
+```
+
+A `BEFORE UPDATE` trigger keeps `updated_at` current automatically.
 
 ## Development
 
 ### Scripts
 
 ```bash
-npm start        # Start production server
-npm run dev      # Start development server with nodemon
-npm test         # Run tests (not yet implemented)
+npm start       # production
+npm run dev     # development (nodemon)
+npm test        # not yet implemented
 ```
 
-### Docker Management
+### Docker Compose — useful commands
 
-```powershell
-# View running containers
-docker ps
-
-# Stop Redis
-docker stop url-shortener-redis
-
-# Start Redis
-docker start url-shortener-redis
-
-# View Redis logs
-docker logs url-shortener-redis
-
-# Remove container
-docker rm url-shortener-redis
+```bash
+docker-compose up --build          # build and start all services
+docker-compose up postgres redis   # infrastructure only (for local dev)
+docker-compose logs -f app         # tail app logs
+docker-compose down                # stop and remove containers
+docker-compose down -v             # also remove volumes (wipes DB)
 ```
-
-### Adding New Features
-
-1. Create new modules in `src/modules/`
-2. Follow the existing pattern: controller → service → repository
-3. Register routes in `src/infra/http/routes.js`
-4. Add validation schemas if needed
-
-## Troubleshooting
-
-### Server won't start
-
-```powershell
-# Check if port 3000 is in use
-netstat -ano | findstr :3000
-
-# Kill Node.js processes
-Get-Process -Name node | Stop-Process -Force
-```
-
-### PostgreSQL connection issues
-
-```powershell
-# Check if PostgreSQL is running
-Get-Service -Name postgresql*
-
-# Test connection manually
-psql -U postgres -d urlshortener -c "SELECT 1;"
-```
-
-### Redis connection issues
-
-```powershell
-# Check Docker container
-docker ps | findstr redis
-
-# View logs
-docker logs url-shortener-redis
-
-# Restart container
-docker restart url-shortener-redis
-```
-
-## Database Schema
-
-```sql
-CREATE TABLE urls (
-  id SERIAL PRIMARY KEY,
-  url TEXT NOT NULL,
-  short_code VARCHAR(10) UNIQUE NOT NULL,
-  access_count INTEGER DEFAULT 0 NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-CREATE INDEX idx_short_code ON urls(short_code);
-
--- Trigger to auto-update updated_at
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER update_urls_updated_at
-    BEFORE UPDATE ON urls
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-```
-
-## Architecture Details
-
-### Request Flow
-
-```
-Client Request
-      ↓
-┌─────────────────┐
-│   Controller    │  ← Validates input (Zod)
-└─────────────────┘
-      ↓
-┌─────────────────┐
-│    Service      │  ← Checks Redis cache
-└─────────────────┘  ← Business logic
-      ↓
-┌─────────────────┐
-│   Repository    │  ← Database queries
-└─────────────────┘
-      ↓
-   PostgreSQL
-```
-
-### Design Patterns
-
-- **Layered Architecture**: Separation of concerns
-- **Dependency Injection**: Services receive repositories
-- **Repository Pattern**: Abstract data access
-- **Cache-Aside**: Redis for performance
-- **Factory Pattern**: Code generation with nanoid
-
-## Performance Considerations
-
-- **Redis Caching**: 24-hour TTL reduces database load
-- **Database Indexing**: Fast lookups on `short_code`
-- **Connection Pooling**: Efficient PostgreSQL connections
-- **Async Operations**: Non-blocking I/O for all operations
-- **Graceful Shutdown**: Proper cleanup on SIGTERM/SIGINT
-
-## Security Notes
-
-1. **Input Validation**: All inputs validated with Zod
-2. **SQL Injection**: Parameterized queries prevent attacks
-3. **URL Validation**: Only valid URLs accepted (max 2048 chars)
-4. **Error Handling**: No sensitive data in error messages
-5. **Environment Variables**: Sensitive config in `.env` (gitignored)
 
 ## Future Enhancements
 
-- [ ] Implement rate limiting per IP
-- [ ] Add JWT authentication
-- [ ] Create frontend interface
-- [ ] Add comprehensive test suite (Jest/Mocha)
-- [ ] Implement analytics dashboard
-- [ ] Add custom short code support
-- [ ] Deploy to cloud (Azure/AWS/Heroku)
-- [ ] Add monitoring with Prometheus
-- [ ] Implement URL expiration
-- [ ] Add QR code generation
+- [ ] Rate limiting per IP
+- [ ] JWT authentication
+- [ ] Custom short code support
+- [ ] URL expiration
+- [ ] Comprehensive test suite (Jest/Vitest)
+- [ ] QR code generation
+- [ ] Analytics dashboard
 
 ## License
 
@@ -550,8 +345,4 @@ MIT
 
 ## Author
 
-Giovana Guedes - [GitHub](https://github.com/GiovanaGuedesSilva)
-
-## Contributing
-
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+Giovana Guedes — [GitHub](https://github.com/GiovanaGuedesSilva)
