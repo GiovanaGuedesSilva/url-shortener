@@ -85,6 +85,20 @@ export class UrlService {
 		return url;
 	}
 
+	async getUrlInfo(shortCode) {
+		try {
+			const redis = getRedisClient();
+			if (redis) {
+				const cached = await redis.get(`url:${shortCode}`);
+				if (cached) return JSON.parse(cached);
+			}
+		} catch (error) {
+			console.error('Error fetching from cache:', error);
+		}
+
+		return this.urlRepository.findByShortCode(shortCode);
+	}
+
 	async invalidateCache(shortCode) {
 		try {
 			const redis = getRedisClient();
