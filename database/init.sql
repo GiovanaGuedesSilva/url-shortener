@@ -1,14 +1,13 @@
--- Database initialization script
--- Run this script to set up the URL shortener database
+-- Manual setup script for the URL Shortener database
+-- For Docker deployments, use docker/postgres/init.sql instead.
 
--- STEP 1: First, create the database (if it doesn't exist)
--- Run this command separately as postgres superuser:
+-- STEP 1: Create the database (run as postgres superuser)
 -- CREATE DATABASE urlshortener;
 
 -- STEP 2: Connect to the database
 -- \c urlshortener
 
--- STEP 3: Drop existing objects if recreating
+-- STEP 3: Drop existing objects (useful for a clean reset)
 DROP TRIGGER IF EXISTS update_urls_updated_at ON urls;
 DROP FUNCTION IF EXISTS update_updated_at_column();
 DROP INDEX IF EXISTS idx_short_code;
